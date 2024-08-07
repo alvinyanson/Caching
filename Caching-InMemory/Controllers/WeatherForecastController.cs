@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using System;
 
 namespace Caching_InMemory.Controllers
 {
     [ApiController]
     [Route("[controller]")]
+    [ResponseCache(Duration = 20, Location = ResponseCacheLocation.Any, VaryByQueryKeys = new string[] { "latest" })]
     public class WeatherForecastController : ControllerBase
     {
         private static readonly string[] Summaries = new[]
@@ -13,51 +15,49 @@ namespace Caching_InMemory.Controllers
         };
 
         private readonly ILogger<WeatherForecastController> _logger;
-        private readonly IMemoryCache _memoryCache;
-        private const string Cache1Key = "WeatherForecastCacheKey";
-        private const string Cache2Key = "SecondCacheKey";
 
 
         public WeatherForecastController(
-            ILogger<WeatherForecastController> logger,
-            IMemoryCache memoryCache)
+            ILogger<WeatherForecastController> logger
+            )
         {
             _logger = logger;
-            _memoryCache = memoryCache;
         }
 
         [HttpGet(Name = "GetWeatherForecast")]
-        public IEnumerable<WeatherForecast> Get()
+        public ActionResult<IEnumerable<WeatherForecast>> Get(bool latest = false)
         {
 
-            if (_memoryCache.TryGetValue(Cache2Key, out IEnumerable<WeatherForecast>? weatherForecasts) && weatherForecasts != null)
-            {
-                _logger.LogInformation("WeatherForecast found in cache.");
-            }
+            _logger.LogInformation("Loading All Weather forecast...");
 
-            else
-            {
-                _logger.LogInformation("WeatherForecast not found in cache. Fetching from database");
-
-
-                var cacheEntryOptions = new MemoryCacheEntryOptions()
-                    .SetSlidingExpiration(TimeSpan.FromSeconds(60))
-                    .SetAbsoluteExpiration(TimeSpan.FromHours(1))
-                    .SetPriority(CacheItemPriority.Normal)
-                    .SetSize(1);
-
-                weatherForecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
-                {
-                    Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                    TemperatureC = Random.Shared.Next(-20, 55),
-                    Summary = Summaries[Random.Shared.Next(Summaries.Length)]
-                }).ToArray();
-
-                _memoryCache.Set(Cache1Key, weatherForecasts, cacheEntryOptions);
-                _memoryCache.Set(Cache2Key, weatherForecasts, cacheEntryOptions);
-            }
-
-            return weatherForecasts;
+            return Ok(WeatherForecasts());
         }
+
+        [HttpGet("{id:int}")]
+        public ActionResult<WeatherForecast> GetOne(int id, bool latest = false)
+        {
+
+            _logger.LogInformation("Loading Single Weather forecast...");
+
+            var match = WeatherForecasts().FirstOrDefault(f => f.Id == id);
+
+            if (match == null) return NotFound();
+
+            return Ok(match);
+        }
+
+        private static IEnumerable<WeatherForecast> WeatherForecasts()
+        {
+
+            return Enumerable.Range(1, 5).Select(index => new WeatherForecast
+            {
+                Id = index,
+                Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                TemperatureC = Random.Shared.Next(-20, 55),
+                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
+            });
+        }
+
+
     }
 }
